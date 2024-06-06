@@ -10,7 +10,7 @@
 
 [Installation](https://github.com/Rakesh3537/Social_Networking/blob/main/README.md#installation)
 
-[API Endpoints](https://github.com/Rakesh3537/Social_Networking/blob/main/README.md#api-reference)
+[API Endpoints](https://github.com/Rakesh3537/Social_Networking/blob/master/README.md#api-endpoints)
 
 [Screenshots](https://github.com/Rakesh3537/Social_Networking/blob/main/README.md#screenshots)
 
