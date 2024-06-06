@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Friends List</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .container {
+            max-width: 800px;
+            margin-top: 50px;
+            padding: 20px;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .friend-card {
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .btn-request {
+            background-color: #007bff;
+            border: none;
+            transition: background-color 0.3s;
+        }
+        .btn-request:hover {
+            background-color: #0056b3;
+        }
+        .user-menu {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .popover {
+            position: absolute;
+            top: -250px; 
+            left: 0;
+            z-index: 1000;
+            display: none;
+            max-width: 600px;
+            background-color: #fff;
+            border: 1px solid rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            padding: 10px;
+            transition: top 0.3s ease-in-out;
+        }
+        .popover.show {
+            display: block;
+            top: 0; 
+            margin-top: 60px;
+            margin-left: 30px;
+            max-width: 600px;
+        }
+        .popover .popover-close {
+            cursor: pointer;
+            float: right;
+            font-size: 18px;
+            margin-bottom: 5px;
+        }
+        .search-result {
+            margin-top: 20px;
+            max-width: 500px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="user-menu">
+        <span id="username" class="mr-3"></span>
+        <button class="btn btn-secondary" onclick="logout()">Logout</button>
+    </div>
+    <h2>Friends List</h2>
+    <form id="search-form">
+        <div class="form-group">
+            <label for="search">Search Users:</label>
+            <input type="text" class="form-control" id="search">
+        </div>
+        <button type="submit" class="btn btn-primary">Search</button>
+    </form>
+    <div id="popover-search" class="popover">
+        <span class="popover-close" onclick="closePopover()">×</span>
+        <div id="search-results" class="search-result"></div>
+        <div id="pagination" class="mt-3"></div> 
+    </div>
+    <h3>
+        <button id="friends-list-btn" class="btn btn-link">Friends List</button> | 
+        <button id="pending-requests-btn" class="btn btn-link">Pending Friend Requests</button>
+    </h3>
+    <div id="friends-list"></div>
+    <div id="pending-requests" style="display:none;"></div>
+</div>
+
+<script>
+    const accessToken = localStorage.getItem('access');
+    const userId = localStorage.getItem('userId'); 
+    const username = localStorage.getItem('username');
+    let currentPage = 1;
+    const resultsPerPage = 5; 
+
+    document.getElementById('username').textContent = username;
+
+    document.getElementById('search-form').addEventListener('submit', function (e) {
+        e.preventDefault();
+        const query = document.getElementById('search').value;
+        searchUsers(query);
+    });
+
+    function searchUsers(query, page = 1) {
+        fetch(`/api/users/search/?q=${query}&page=${page}&limit=${resultsPerPage}`, {
+            headers: {
+                'Authorization': 'Bearer ' + accessToken,
+            },
+        })
+        .then(response => response.json())
+        .then(data => {
+            const popover = document.getElementById('popover-search');
+            const searchResults = document.getElementById('search-results');
+            searchResults.innerHTML = '';
+            if (data.results && Array.isArray(data.results)) {
+                data.results.forEach(user => {
+                    if (user.username !== username) {
+                        const resultDiv = document.createElement('div');
+                        resultDiv.classList.add('friend-card');
+                        resultDiv.innerHTML = `
+                            <div>${user.first_name} ${user.last_name} (${user.email})</div>
+                            <button class="btn btn-request" onclick="sendFriendRequest(${user.id})">Send Request</button>
+                        `;
+                        searchResults.appendChild(resultDiv);
+                    }
+                });
+                popover.classList.add('show');
+                if (data.total_pages > 1) {
+                    renderPagination(data.total_pages);
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error searching users:', error);
+        });
+    }
+
+    function renderPagination(totalPages) {
+        const pagination = document.getElementById('pagination');
+        pagination.innerHTML = '';
+
+        for (let i = 1; i <= totalPages; i++) {
+            const pageLink = document.createElement('span');
+            pageLink.textContent = i;
+            pageLink.classList.add('mr-2', 'cursor-pointer', 'page-link');
+            pageLink.addEventListener('click', function() {
+                currentPage = i;
+                const query = document.getElementById('search').value;
+                searchUsers(query, currentPage);
+            });
+            pagination.appendChild(pageLink);
+        }
+    }
+
+    function sendFriendRequest(toUserId) {
+        fetch('/api/users/friend-request/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + accessToken,
+            },
+            body: JSON.stringify({ to_user: toUserId }),
+        })
+        .then(response => {
+            if (response.ok) {
+                alert('Friend request sent!');
+            } else {
+                return response.json().then(data => {
+                    alert('Error: ' + JSON.stringify(data));
+                });
+            }
+        });
+    }
+
+    function loadPendingRequests() {
+        fetch('/api/users/friend-requests/', {
+            headers: {
+                'Authorization': 'Bearer ' + accessToken,
+            },
+        })
+        .then(response => response.json())
+        .then(data => {
+            const pendingRequests = document.getElementById('pending-requests');
+            pendingRequests.innerHTML = '';
+            if (data.results && Array.isArray(data.results)) {
+                data.results.forEach(request => {
+                    const requestDiv = document.createElement('div');
+                    requestDiv.classList.add('friend-card');
+                    const fromUser = request.from_user;
+                    const senderName = fromUser.first_name + ' ' + fromUser.last_name;
+                    const senderEmail = fromUser.email;
+                    requestDiv.innerHTML = `
+                        <p>From: ${senderName} (${senderEmail})</p>
+                        <button class="btn btn-request" onclick="respondFriendRequest(${request.id}, 'accept')">Accept</button>
+                        <button class="btn btn-request" onclick="respondFriendRequest(${request.id}, 'reject')">Reject</button>
+                    `;
+                    pendingRequests.appendChild(requestDiv);
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching pending requests:', error);
+        });
+    }
+
+    function loadFriendsList() {
+        fetch('/api/users/friends/', {
+            headers: {
+                'Authorization': 'Bearer ' + accessToken,
+            },
+        })
+        .then(response => response.json())
+        .then(data => {
+            const friendsList = document.getElementById('friends-list');
+            friendsList.innerHTML = '';
+            data.results.forEach(user => {
+                const userDiv = document.createElement('div');
+                userDiv.classList.add('friend-card');
+                userDiv.innerHTML = `
+                    <div>${user.first_name} ${user.last_name} (${user.email})</div>
+                `;
+                friendsList.appendChild(userDiv);
+            });
+        })
+        .catch(error => {
+            console.error('Error fetching friends list:', error);
+        });
+    }
+
+    function respondFriendRequest(requestId, action) {
+        fetch(`/api/users/friend-requests/${requestId}/`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + accessToken,
+            },
+            body: JSON.stringify({ action: action }),
+        })
+        .then(response => response.json())
+        .then(data => {
+            alert(`Request ${action}ed!`);
+            loadPendingRequests();
+        });
+    }
+
+    function closePopover() {
+        const popover = document.getElementById('popover-search');
+        popover.classList.remove('show');
+    }
+
+    function logout() {
+        localStorage.removeItem('access');
+        localStorage.removeItem('username');
+        localStorage.removeItem('userId');
+        window.location.href = '/login/';
+    }
+
+    document.getElementById('friends-list-btn').addEventListener('click', function () {
+        document.getElementById('friends-list').style.display = 'block';
+        document.getElementById('pending-requests').style.display = 'none';
+        loadFriendsList();
+    });
+
+    document.getElementById('pending-requests-btn').addEventListener('click', function () {
+        document.getElementById('pending-requests').style.display = 'block';
+        document.getElementById('friends-list').style.display = 'none';
+        loadPendingRequests();
+    });
+
+    loadFriendsList();
+</script>
+</body>
+</html>
